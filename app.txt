@@ -1,0 +1,41 @@
+from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask_cors import CORS
+import os
+import uuid
+from dfa_converter import regex_to_dfa, draw_dfa
+from nfa_converter import regex_to_nfa, draw_nfa
+
+app = Flask(__name__, static_folder="client/build", template_folder="client/build")
+CORS(app)
+os.makedirs("static/images", exist_ok=True)
+
+@app.route('/convert', methods=['POST'])
+def convert():
+    data = request.get_json()
+    regex = data.get("regex")
+    automaton_type = data.get("automaton")
+
+    if not regex or automaton_type not in {"nfa", "dfa"}:
+        return jsonify({"error": "Invalid input"}), 400
+
+    image_id = str(uuid.uuid4())
+    image_path = f"static/images/{image_id}.png"
+
+    if automaton_type == 'nfa':
+        automaton = regex_to_nfa(regex)
+        draw_nfa(automaton, image_path.replace(".png", ""))
+    else:
+        automaton = regex_to_dfa(regex)
+        draw_dfa(automaton, image_path.replace(".png", ""))
+
+    return jsonify({"image_url": f"/{image_path}"})
+
+
+# Serve React frontend
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return render_template("index.html")
